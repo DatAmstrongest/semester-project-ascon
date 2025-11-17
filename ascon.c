@@ -44,9 +44,10 @@ static inline void ascon_round(ascon_ctx_t* ctx, uint64_t C) {
     // 3. Linear Layer (XOR-shifts)
     x0 ^= ROR(x0, 19) ^ ROR(x0, 28);
     x1 ^= ROR(x1, 61) ^ ROR(x1, 39);
-    x2 ^= ROR(x2, 1);  ^ ROR(x2, 6);
+    // FIX: Removed the erroneous semicolon (;) after ROR(x2, 1)
+    x2 ^= ROR(x2, 1) ^ ROR(x2, 6);
     x3 ^= ROR(x3, 10) ^ ROR(x3, 17);
-    x4 ^= ROR(x4, 7)  ^ ROR(x4, 41);
+    x4 ^= ROR(x4, 7) ^ ROR(x4, 41);
 
     ctx->x[0] = x0; ctx->x[1] = x1; ctx->x[2] = x2; ctx->x[3] = x3; ctx->x[4] = x4;
 }

@@ -5,6 +5,9 @@
 #include "simpleserial.h"
 #include "hal.h"
 
+// The explicit 'extern' declarations are removed as they did not resolve the error.
+
+
 // --- Global Context and Buffers ---
 
 // Global ASCON context (320 bits)
@@ -14,7 +17,7 @@ ascon_ctx_t ascon_ctx;
 uint8_t key[ASCON_KEY_LEN];
 uint8_t nonce[ASCON_NONCE_LEN];
 
-// Utility buffer for returning the 40-byte state
+// Utility buffer for returning the 40-byte state (Kept for optional use, but currently unused)
 uint8_t state_output[ASCON_STATE_WORDS * 8];
 
 // --- SimpleSerial Command Handlers ---
@@ -46,7 +49,7 @@ uint8_t set_nonce(uint8_t* data, uint8_t len) {
  *
  * This function calls ascon_init() and includes trigger calls for tracing.
  * Format: i
- * Returns: 40-byte final state (after initialization)
+ * Returns: 0x00 (Success)
  */
 uint8_t do_init(uint8_t* data, uint8_t len) {
     // 1. Set the trigger high
@@ -59,11 +62,9 @@ uint8_t do_init(uint8_t* data, uint8_t len) {
     // 3. Set the trigger low
     trigger_low();
 
-    // 4. Copy the resulting state to the output buffer
+    // The result (40-byte state) is calculated and stored here,
+    // but is NOT sent back, as requested (no simpleserial_write).
     ascon_state_to_bytes(state_output, &ascon_ctx);
-
-    // 5. Send the 40-byte final state back to the host
-    simpleserial_write('r', ASCON_STATE_WORDS * 8, state_output);
 
     return 0x00; // Success
 }
@@ -90,6 +91,10 @@ int main(void) {
     // Initialize hardware and SimpleSerial
     platform_init();
     init_uart();
+    
+    // Initializing SimpleSerial for command processing
+    simpleserial_init();
+    
     trigger_setup();
 
     // Define the SimpleSerial commands
