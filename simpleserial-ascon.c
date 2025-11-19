@@ -5,19 +5,15 @@
 #include "simpleserial.h"
 #include "hal.h"
 
-// The explicit 'extern' declarations are removed as they did not resolve the error.
-
-
 // --- Global Context and Buffers ---
 
 // Global ASCON context (320 bits)
 ascon_ctx_t ascon_ctx;
 
-// Buffers for key and nonce (128 bits each)
+// Key buffer (128 bits) - Key remains static
 uint8_t key[ASCON_KEY_LEN];
-uint8_t nonce[ASCON_NONCE_LEN];
 
-// Utility buffer for returning the 40-byte state (Kept for optional use, but currently unused)
+// Utility buffer for returning the 40-byte state
 uint8_t state_output[ASCON_STATE_WORDS * 8];
 
 // --- SimpleSerial Command Handlers ---
@@ -34,45 +30,39 @@ uint8_t set_key(uint8_t* data, uint8_t len) {
 }
 
 /**
- * @brief SimpleSerial command to set the 16-byte nonce ('n').
- * Format: n<16-byte-hex-nonce>
- */
-uint8_t set_nonce(uint8_t* data, uint8_t len) {
-    if (len != ASCON_NONCE_LEN) return 0x01; // Error: Incorrect length
-
-    memcpy(nonce, data, ASCON_NONCE_LEN);
-    return 0x00; // Success
-}
-
-/**
- * @brief SimpleSerial command to perform the ASCON initialization ('i').
+ * @brief SimpleSerial command to perform the ASCON initialization.
  *
- * This function calls ascon_init() and includes trigger calls for tracing.
- * Format: i
- * Returns: 0x00 (Success)
+ * Mapped to 'p' (Plaintext/Payload).
+ * The input 'data' IS the 16-byte Nonce.
+ * Format: p<16-byte-hex-nonce>
+ * Returns: 40-byte final state (after initialization)
  */
-uint8_t do_init(uint8_t* data, uint8_t len) {
-    // 1. Set the trigger high
+uint8_t do_init_with_nonce(uint8_t* data, uint8_t len) {
+    // Check if the Nonce length is correct (16 bytes)
+    if (len != ASCON_NONCE_LEN) return 0x01;
+
+    // 1. Set the trigger high to start capture
     trigger_high();
 
     // 2. Perform the ASCON initialization phase
-    // This is the function we want to target for side-channel analysis.
-    ascon_init(&ascon_ctx, key, nonce);
+    // We pass 'data' directly as the nonce.
+    ascon_init(&ascon_ctx, key, data);
 
-    // 3. Set the trigger low
+    // 3. Set the trigger low to stop capture
     trigger_low();
 
-    // The result (40-byte state) is calculated and stored here,
-    // but is NOT sent back, as requested (no simpleserial_write).
+    // 4. Copy the resulting state to the output buffer
     ascon_state_to_bytes(state_output, &ascon_ctx);
+
+    // 5. Send the 40-byte final state back to the host
+    // CORRECTION HERE: Changed simpleserial_write to simpleserial_put
+    simpleserial_put('r', ASCON_STATE_WORDS * 8, state_output);
 
     return 0x00; // Success
 }
 
-
 /**
- * @brief Command to reset the key, nonce, and context ('z').
- * This is useful for clearing state between traces.
+ * @brief Command to reset the key and context ('z').
  */
 uint8_t reset_ascon(uint8_t* data, uint8_t len) {
     (void)data; // unused
@@ -80,8 +70,7 @@ uint8_t reset_ascon(uint8_t* data, uint8_t len) {
 
     memset(&ascon_ctx, 0, sizeof(ascon_ctx_t));
     memset(key, 0, ASCON_KEY_LEN);
-    memset(nonce, 0, ASCON_NONCE_LEN);
-
+    
     return 0x00; // Success
 }
 
@@ -91,17 +80,12 @@ int main(void) {
     // Initialize hardware and SimpleSerial
     platform_init();
     init_uart();
-    
-    // Initializing SimpleSerial for command processing
-    simpleserial_init();
-    
     trigger_setup();
 
     // Define the SimpleSerial commands
-    simpleserial_addcmd('k', ASCON_KEY_LEN, set_key);   // Set Key
-    simpleserial_addcmd('n', ASCON_NONCE_LEN, set_nonce); // Set Nonce
-    simpleserial_addcmd('i', 0, do_init);             // Perform Initialization
-    simpleserial_addcmd('z', 0, reset_ascon);         // Reset state
+    simpleserial_addcmd('k', ASCON_KEY_LEN, set_key);               // Set Key (Static)
+    simpleserial_addcmd('p', ASCON_NONCE_LEN, do_init_with_nonce);  // Input Nonce & Trigger
+    simpleserial_addcmd('z', 0, reset_ascon);                       // Reset state
 
     // Main event loop
     while (1) {
