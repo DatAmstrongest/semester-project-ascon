@@ -1,21 +1,41 @@
-#ifndef ASCON_H
-#define ASCON_H
+#ifndef ASCON_H_
+#define ASCON_H_
 
 #include <stdint.h>
-#include <stddef.h>
 
-// ASCON-128 Constants
-#define ASCON_KEY_LEN     16 // 128 bits
-#define ASCON_NONCE_LEN   16 // 128 bits
-#define ASCON_STATE_WORDS 5  // 5x 64-bit words = 320 bits
-#define ASCON_P_INIT      12 // Rounds for initialization permutation
+#define ASCON_KEYBYTES 16
+#define ASCON_NPUBBYTES 16
+#define ASCON_ABYTES 16
+#define ASCON_AEAD_RATE 16
+#define ASCON_AEAD_VARIANT 1
+#define ASCON_PA_ROUNDS 12
 
 typedef struct {
-    uint64_t x[ASCON_STATE_WORDS];
-} ascon_ctx_t;
+  uint64_t x[5];
+} ascon_state_t;
 
-void ascon_p(ascon_ctx_t* ctx, const int rounds);
-void ascon_init(ascon_ctx_t* ctx, const uint8_t* key, const uint8_t* nonce);
-void ascon_state_to_bytes(uint8_t* dst, const ascon_ctx_t* ctx);
+int ascon_aead_encrypt(
+    unsigned char *c,
+    unsigned long long *clen,
+    const unsigned char *m,
+    unsigned long long mlen,
+    const unsigned char *ad,
+    unsigned long long adlen,
+    const unsigned char *nsec,
+    const unsigned char *npub,
+    const unsigned char *k
+);
 
-#endif // ASCON_H
+int ascon_aead_decrypt(
+    unsigned char *m,
+    unsigned long long *mlen,
+    unsigned char *nsec,
+    const unsigned char *c,
+    unsigned long long clen,
+    const unsigned char *ad,
+    unsigned long long adlen,
+    const unsigned char *npub,
+    const unsigned char *k
+);
+
+#endif /* ASCON_H_ */
